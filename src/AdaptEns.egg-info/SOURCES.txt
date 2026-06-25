@@ -1,0 +1,5 @@
+pyproject.toml
+src/AdaptEns.egg-info/PKG-INFO
+src/AdaptEns.egg-info/SOURCES.txt
+src/AdaptEns.egg-info/dependency_links.txt
+src/AdaptEns.egg-info/top_level.txt

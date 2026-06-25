@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: AdaptEns
+Version: 0.1.0
+Summary: Adapative Selection of ECMWF Ensemble using FSS displacement
+Author: Rovie S. de Ramos
+Requires-Python: >=3.11
