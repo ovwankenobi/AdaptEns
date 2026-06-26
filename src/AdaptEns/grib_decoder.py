@@ -23,7 +23,6 @@ import pandas as pd
 import xarray as xr
 import numpy as np
 import glob
-from concurrent.futures import ProcessPoolExecutor, as_completed
 
 VARS = {"tp", "10u", "10v", "msl"}
 
@@ -205,11 +204,12 @@ class decode_Grib:
 
     def __init__(self, path_gribfolder=None,
                  is_ensemble=True,
-                 delete_tmp_folders=False):
+                 delete_tmp_folders=False,
+                 name = None):
         self.path_gribfolder = path_gribfolder
         self.delete_tmp_folders = delete_tmp_folders
         self.is_ensemble = is_ensemble
-        self.name = "ecmwf_meteo"
+        self.name = name
         self.base_dir = os.path.dirname(self.path_gribfolder)
 
     def grib_parameters(self):
@@ -245,39 +245,20 @@ class decode_Grib:
     def loadgrib(self):
         variables = ("10u", "10v", "msl", "tp")
 
-        if self.is_ensemble:
-            ensemble_members = range(1, 51)
-        else:
-            ensemble_members = [50]
+        ensemble_members = list(range(1, 51)) if self.is_ensemble else [50]
 
         sample_folder = os.path.join(self.tmp_param, f"{ensemble_members[0]}_ens")
-        sample_file = glob.glob(os.path.join(sample_folder, "msl_step*.grib"))[0]
-
-        sample_ds = xr.open_dataset(
-            sample_file,
-            engine="cfgrib",
-            backend_kwargs={"indexpath": ""}
-        )
-
         n_files = len(glob.glob(os.path.join(sample_folder, "msl_step*.grib")))
-        sample_ds.close()
-
         total_outputs = len(ensemble_members) * n_files
 
         workers = max(4, mp.cpu_count() - 1)
 
         with tqdm(total=total_outputs, desc="Writing NetCDF files", unit="file") as pbar:
-            with ProcessPoolExecutor(max_workers=workers) as executor:
-                futures = {
-                    executor.submit(
-                        _process_member,
-                        (m, self.tmp_param, variables, self.name, self.base_dir)
-                    ): m
-                    for m in ensemble_members
-                }
-
-                for future in as_completed(futures):
-                    member, files_written = future.result()
+            with mp.Pool(workers) as pool:
+                for ensemble_members, files_written in pool.imap_unordered(
+                    _process_member,
+                    [(m, self.tmp_param, variables, self.name, self.base_dir) for m in ensemble_members]
+                ):
                     pbar.update(files_written)
 
         if self.delete_tmp_folders:
@@ -286,6 +267,6 @@ class decode_Grib:
 
 if __name__ == "__main__":
     path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260621_00z\_tmp_grib"
-    a = decode_Grib(path, is_ensemble=True)
+    a = decode_Grib(path, is_ensemble=True, name = "ecmwf_meteo")
     a.grib_parameters()
     a.loadgrib()
