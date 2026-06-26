@@ -181,7 +181,7 @@ class MakeFraction:
         self.base_dir  = Path(base_dir)
         self.adapt_dir = self.base_dir / "_adapt"
 
-    def fraction(self) -> None:
+    def compute_fraction(self) -> None:
         threshold_dir = self.adapt_dir / "_50th_percentile"
         fraction_dir  = self.adapt_dir / "_fraction"
 
@@ -226,4 +226,4 @@ class MakeFraction:
 
 if __name__ == "__main__":
     path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260621_00z"
-    MakeFraction(path).fraction()
+    MakeFraction(path).compute_fraction()
