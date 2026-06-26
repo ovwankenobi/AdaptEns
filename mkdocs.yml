@@ -1,0 +1,19 @@
+site_name: AdaptEns
+site_description: Adaptive Selection of ECMWF Ensemble documentation.
+site_author: Rovie S. de Ramos
+
+theme:
+  name: readthedocs
+
+nav:
+  - Home: index.md
+  - User Guide:
+      - Input and output folders: user-guide/folder-structure.md
+  - Modules:
+      - grib_decoder.py: modules/grib_decoder.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - tables
