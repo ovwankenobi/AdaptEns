@@ -1,6 +1,6 @@
 # Input and Output Folder Structure
 
-`grib_decoder.py` expects a folder containing ECMWF GRIB files. The parent folder of that GRIB input folder becomes the working directory for temporary files and NetCDF outputs. `make50thpercentile.py` then reads those ensemble NetCDF output folders and writes median products under `_adapt`.
+`grib_decoder.py` expects a folder containing ECMWF GRIB files. The parent folder of that GRIB input folder becomes the working directory for temporary files and NetCDF outputs. `make_threshold.py` reads those ensemble NetCDF output folders and writes median threshold products under `_adapt`. `fraction.py` then compares each ensemble file against those thresholds and writes neighborhood fraction products.
 
 ## Input Folder
 
@@ -98,6 +98,35 @@ It groups files by matching NetCDF filename, computes the median across ensemble
 ```
 
 The output filenames match the input timestep filenames. Each output file contains the 50th percentile value for every data variable and grid cell at that timestep.
+
+## Fraction Output Folder
+
+After `_adapt/_50th_percentile` exists, `MakeFraction(base_dir).fraction()` reads every ensemble NetCDF file and finds the matching threshold file by filename.
+
+For each ensemble file, it computes fraction fields for:
+
+| Variable | Neighborhood half-widths |
+| --- | --- |
+| `barometric_pressure` | `L1`, `L3`, `L5` |
+| `wind_u` | `L1`, `L3`, `L5` |
+| `wind_v` | `L1`, `L3`, `L5` |
+
+The output is written by ensemble member:
+
+```text
+20260621_00z/
+`-- _adapt/
+    |-- _50th_percentile/
+    `-- _fraction/
+        |-- 1_ens/
+        |   |-- ecmwf_meteo.20260621_0000.nc
+        |   |-- ecmwf_meteo.20260621_0300.nc
+        |   `-- ...
+        |-- 2_ens/
+        `-- ...
+```
+
+Each fraction file keeps the same timestep filename as the source ensemble file.
 
 ## Output Variables
 

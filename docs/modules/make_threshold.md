@@ -1,6 +1,6 @@
-# `make50thpercentile.py`
+# `make_threshold.py`
 
-`make50thpercentile.py` creates a 50th percentile, or median, NetCDF product from ensemble-member NetCDF files.
+`make_threshold.py` creates the 50th percentile, or median, threshold NetCDF product from ensemble-member NetCDF files.
 
 It is designed to run after `grib_decoder.py`. The decoder writes folders such as `1_ens`, `2_ens`, and so on. This module reads matching timestep files across those folders and writes one median NetCDF file per timestep.
 
@@ -11,7 +11,7 @@ Per-member NetCDF files
     -> group files by matching timestep filename
     -> load all available ensemble members for one timestep
     -> compute nanmedian across the ensemble dimension
-    -> write one NetCDF file to _adapt/_50th_percentile
+    -> write one threshold NetCDF file to _adapt/_50th_percentile
 ```
 
 ## Input Folder
@@ -41,22 +41,11 @@ Outputs are written to:
 <base_dir>/_adapt/_50th_percentile/
 ```
 
-Example:
-
-```text
-20260621_00z/
-`-- _adapt/
-    `-- _50th_percentile/
-        |-- ecmwf_meteo.20260621_0000.nc
-        |-- ecmwf_meteo.20260621_0300.nc
-        `-- ...
-```
-
 The output filename is the same as the timestep filename being processed.
 
 ## `_median_one_var(args)`
 
-Computes the median for one variable.
+Computes the median for one variable using `np.nanmedian(data, axis=0)`. Missing values are ignored when calculating the median.
 
 Expected `args` tuple:
 
@@ -66,20 +55,9 @@ Expected `args` tuple:
 | `1` | `data` | NumPy array with ensemble as axis `0`. |
 | `2` | `attrs` | Original variable attributes to copy to the output. |
 
-The function uses `np.nanmedian(data, axis=0)`, so missing values are ignored when calculating the median.
-
 ## `_compute_p50(args)`
 
 Internal worker that processes one timestep filename.
-
-Expected `args` tuple:
-
-| Position | Name | Meaning |
-| --- | --- | --- |
-| `0` | `filename` | NetCDF filename shared by ensemble members. |
-| `1` | `nc_files` | List of matching NetCDF files from ensemble folders. |
-| `2` | `out_dir` | Destination folder for 50th percentile outputs. |
-| `3` | `n_inner` | Number of threads for per-variable median calculation. |
 
 This worker:
 
@@ -95,7 +73,7 @@ If all ensemble files for a timestep are invalid, it returns an error for that f
 
 ## `make_50th_percentile`
 
-Primary class for creating the median product.
+Primary class for creating the threshold product.
 
 ### Constructor
 
@@ -106,13 +84,6 @@ make_50th_percentile(base_dir)
 | Parameter | Description |
 | --- | --- |
 | `base_dir` | Forecast-cycle folder containing ensemble output folders such as `1_ens`, `2_ens`, and so on. |
-
-The constructor also sets:
-
-| Attribute | Value |
-| --- | --- |
-| `base_dir` | The input forecast-cycle folder as a `Path`. |
-| `adapt_dir` | `<base_dir>/_adapt`. |
 
 ### `_collect_tasks()`
 
@@ -161,7 +132,7 @@ The files are written with the `h5netcdf` engine.
 ## Example
 
 ```python
-from AdaptEns.make50thpercentile import make_50th_percentile
+from AdaptEns.make_threshold import make_50th_percentile
 
 path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260621_00z"
 
