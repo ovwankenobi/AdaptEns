@@ -1,6 +1,6 @@
 # Input and Output Folder Structure
 
-`grib_decoder.py` expects a folder containing ECMWF GRIB files. The parent folder of that GRIB input folder becomes the working directory for temporary files and NetCDF outputs.
+`grib_decoder.py` expects a folder containing ECMWF GRIB files. The parent folder of that GRIB input folder becomes the working directory for temporary files and NetCDF outputs. `make50thpercentile.py` then reads those ensemble NetCDF output folders and writes median products under `_adapt`.
 
 ## Input Folder
 
@@ -78,6 +78,26 @@ When `loadgrib()` runs, it creates one folder per ensemble member in `base_dir`:
 Each NetCDF file contains one forecast time for one ensemble member.
 
 For a Day 0 to Day 5 forecast range, the GRIB parameter-splitting stage usually takes about `30 seconds`, while the NetCDF writing stage usually takes about `1 minute`.
+
+## 50th Percentile Output Folder
+
+After the ensemble NetCDF files are available, `make_50th_percentile(base_dir).make_50th_percentile()` reads all folders in `base_dir` whose names end with `_ens`.
+
+It groups files by matching NetCDF filename, computes the median across ensemble members for each variable, and writes the output to:
+
+```text
+20260621_00z/
+|-- 1_ens/
+|-- 2_ens/
+|-- ...
+`-- _adapt/
+    `-- _50th_percentile/
+        |-- ecmwf_meteo.20260621_0000.nc
+        |-- ecmwf_meteo.20260621_0300.nc
+        `-- ...
+```
+
+The output filenames match the input timestep filenames. Each output file contains the 50th percentile value for every data variable and grid cell at that timestep.
 
 ## Output Variables
 

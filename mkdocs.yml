@@ -11,6 +11,7 @@ nav:
       - Input and output folders: user-guide/folder-structure.md
   - Modules:
       - grib_decoder.py: modules/grib_decoder.md
+      - make50thpercentile.py: modules/make50thpercentile.md
 
 markdown_extensions:
   - admonition
