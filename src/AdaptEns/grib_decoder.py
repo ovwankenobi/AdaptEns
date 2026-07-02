@@ -5,7 +5,7 @@ Created on June 2026
 @author: Rovie de Ramos
 @email: rsderamos01@gmail.com
 """
-
+import sys
 import os
 import time
 import multiprocessing as mp
@@ -202,11 +202,12 @@ def _process_member(args):
 
 class decode_Grib:
 
-    def __init__(self, path_gribfolder=None,
+    def __init__(self, path=None,
                  is_ensemble=True,
                  delete_tmp_folders=False,
                  name = None):
-        self.path_gribfolder = path_gribfolder
+        self.path = path
+        self.path_gribfolder = os.path.join(self.path,"_tmp_grib")
         self.delete_tmp_folders = delete_tmp_folders
         self.is_ensemble = is_ensemble
         self.name = name
@@ -266,7 +267,22 @@ class decode_Grib:
 
 
 if __name__ == "__main__":
-    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260621_00z\_tmp_grib"
+    """
+    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260621_00z"
     a = decode_Grib(path, is_ensemble=True, name = "ecmwf_meteo")
     a.grib_parameters()
     a.loadgrib()
+    """
+
+
+    if len(sys.argv) != 2:
+        print("Usage: python run grib_decoder.py <path>")
+        sys.exit(1)
+
+    path = sys.argv[1]
+
+    a = decode_Grib(path, is_ensemble=True, name = "ecmwf_meteo")
+    a.grib_parameters()
+    a.loadgrib()
+    
+    
