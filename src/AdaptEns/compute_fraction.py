@@ -225,5 +225,5 @@ class MakeFraction:
 
 
 if __name__ == "__main__":
-    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260621_00z"
+    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260701_18z"
     MakeFraction(path).compute_fraction()

@@ -183,5 +183,5 @@ class make_50th_percentile:
 
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260621_00z"
+    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260701_18z"
     make_50th_percentile(path).make_50th_percentile()

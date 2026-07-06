@@ -10,11 +10,19 @@ import numpy as np
 def load_npz(npz_path):
     data = np.load(npz_path, allow_pickle=False)
 
-    scores = data["scores"]
-    ensembles = data["ensembles"]
-    keys = data["keys"]
+    # total-displacement files store a per-ensemble/per-variable value;
+    # pairwise files store displacement or raw FSS scores between ensembles
+    if "total_displacement" in data.files:
+        values = data["total_displacement"]
+    elif "displacement" in data.files:
+        values = data["displacement"]
+    else:
+        values = data["summed"]
 
-    return scores, ensembles, keys
+    ensembles = data["ensembles"]
+    keys = data["variables"] if "variables" in data.files else data["keys"]
+
+    return values, ensembles, keys
 
 
 def choose_file(npz_files):
@@ -54,14 +62,25 @@ def choose_ensemble(ensembles, label):
         print("Invalid choice.")
 
 
-def show_scores(scores, ensembles, keys, i, j):
+def show_displacement(displacement, ensembles, keys, i, j):
     print("\n" + "=" * 60)
     print(f"Comparison: {ensembles[i]} vs {ensembles[j]}")
     print("=" * 60)
 
     for k, key in enumerate(keys):
-        score = scores[i, j, k]
-        print(f"{key:30s} : {score:.6f}")
+        value = displacement[i, j, k]
+        print(f"{key:30s} : {value:.6f}")
+
+    print("=" * 60)
+
+
+def show_total_displacement(values, ensembles, keys, i):
+    print("\n" + "=" * 60)
+    print(f"Total displacement: {ensembles[i]}")
+    print("=" * 60)
+
+    for k, key in enumerate(keys):
+        print(f"{key:30s} : {values[i, k]:.6f}")
 
     print("=" * 60)
 
@@ -87,14 +106,17 @@ def main():
         if selected is None:
             break
 
-        scores, ensembles, keys = load_npz(selected)
+        values, ensembles, keys = load_npz(selected)
 
-        i = choose_ensemble(ensembles, "A")
-        j = choose_ensemble(ensembles, "B")
+        if values.ndim == 2:
+            i = choose_ensemble(ensembles, "ensemble")
+            show_total_displacement(values, ensembles, keys, i)
+        else:
+            i = choose_ensemble(ensembles, "A")
+            j = choose_ensemble(ensembles, "B")
+            show_displacement(values, ensembles, keys, i, j)
 
-        show_scores(scores, ensembles, keys, i, j)
-
-        again = input("\nInspect another pair? (y/n): ").strip().lower()
+        again = input("\nInspect another? (y/n): ").strip().lower()
         if again != "y":
             break
 

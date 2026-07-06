@@ -268,7 +268,7 @@ class decode_Grib:
 
 if __name__ == "__main__":
     """
-    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260621_00z"
+    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260701_18z"
     a = decode_Grib(path, is_ensemble=True, name = "ecmwf_meteo")
     a.grib_parameters()
     a.loadgrib()
@@ -281,7 +281,7 @@ if __name__ == "__main__":
 
     path = sys.argv[1]
 
-    a = decode_Grib(path, is_ensemble=True, name = "ecmwf_meteo")
+    a = decode_Grib(path, is_ensemble=True, delete_tmp_folders=True, name = "ecmwf_meteo")
     a.grib_parameters()
     a.loadgrib()
     
