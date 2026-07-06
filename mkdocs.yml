@@ -9,10 +9,16 @@ nav:
   - Home: index.md
   - User Guide:
       - Input and output folders: user-guide/folder-structure.md
+  - Pipeline:
+      - runner.py (orchestrator): modules/runner.md
   - Modules:
       - grib_decoder.py: modules/grib_decoder.md
       - make_threshold.py: modules/make_threshold.md
-      - fraction.py: modules/fraction.md
+      - compute_fraction.py: modules/compute_fraction.md
+      - make_fss_disp.py: modules/make_fss_disp.md
+      - get_mean_displacement.py: modules/get_mean_displacement.md
+      - rank_ensemble.py: modules/rank_ensemble.md
+      - clean_up.py: modules/clean_up.md
 
 markdown_extensions:
   - admonition
