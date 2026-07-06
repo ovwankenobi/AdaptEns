@@ -27,6 +27,19 @@ import xarray as xr
 from tqdm import tqdm
 
 
+def _limit_timesteps(items, compute_timestep):
+    """
+    Restrict an ordered sequence of timestep items to the requested count.
+
+    compute_timestep = "ALL" -> keep every timestep.
+    compute_timestep = 1     -> keep only the first timestep.
+    compute_timestep = N     -> keep the first N timesteps.
+    """
+    if isinstance(compute_timestep, str) and compute_timestep.upper() == "ALL":
+        return items
+    return items[: int(compute_timestep)]
+
+
 # ---------------------------------------------------------------------------
 # Inner worker — runs in a thread (np.nanmedian releases the GIL)
 # ---------------------------------------------------------------------------
@@ -109,9 +122,10 @@ def _compute_p50(args: tuple) -> tuple[str, str | None]:
 # ---------------------------------------------------------------------------
 class make_50th_percentile:
 
-    def __init__(self, base_dir: str) -> None:
+    def __init__(self, base_dir: str, compute_timestep: int | str = "ALL") -> None:
         self.base_dir = Path(base_dir)
         self.adapt_dir = self.base_dir / "_adapt"
+        self.compute_timestep = compute_timestep
 
     # ------------------------------------------------------------------
     def _collect_tasks(self) -> dict[str, list[str]]:
@@ -135,6 +149,9 @@ class make_50th_percentile:
         if not timestep_files:
             print("No NetCDF files found.")
             return
+
+        kept_names = _limit_timesteps(sorted(timestep_files), self.compute_timestep)
+        timestep_files = {name: timestep_files[name] for name in kept_names}
 
         total_tasks = len(timestep_files)
         total_cores = mp.cpu_count()
@@ -183,5 +200,5 @@ class make_50th_percentile:
 
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260701_18z"
-    make_50th_percentile(path).make_50th_percentile()
+    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260701_12z"
+    make_50th_percentile(path, compute_timestep="ALL").make_50th_percentile()

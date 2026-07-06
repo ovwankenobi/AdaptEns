@@ -20,14 +20,28 @@ import numpy as np
 from tqdm import tqdm
 
 
+def _limit_timesteps(items, compute_timestep):
+    """
+    Restrict an ordered sequence of timestep items to the requested count.
+
+    compute_timestep = "ALL" -> keep every timestep.
+    compute_timestep = 1     -> keep only the first timestep.
+    compute_timestep = N     -> keep the first N timesteps.
+    """
+    if isinstance(compute_timestep, str) and compute_timestep.upper() == "ALL":
+        return items
+    return items[: int(compute_timestep)]
+
+
 class rank_ensemble:
-    def __init__(self, base_dir):
+    def __init__(self, base_dir, compute_timestep: int | str = "ALL"):
         self.base_dir = Path(base_dir)
 
         self.mean_disp_dir = self.base_dir / "_adapt" / "_mean_disp"
         self.adapt_dir = self.base_dir / "_adapt"
         self.adapt_dir.mkdir(parents=True, exist_ok=True)
         self.out_path = self.adapt_dir / "ens_ranked.json"
+        self.compute_timestep = compute_timestep
 
         self.ensembles: list[str] | None = None
         self.variables: list[str] | None = None
@@ -49,6 +63,8 @@ class rank_ensemble:
         if not npz_files:
             print(f"No NPZ files found in {self.mean_disp_dir}")
             return None
+
+        npz_files = _limit_timesteps(npz_files, self.compute_timestep)
 
         ensembles: list[str] | None = None
         variables: list[str] | None = None
@@ -116,9 +132,9 @@ class rank_ensemble:
 if __name__ == "__main__":
     path = (
         r"D:\rsderamos\Operational_06_18_2026\Operations"
-        r"\meteo_database\ecmwf_meteo\20260701_18z"
+        r"\meteo_database\ecmwf_meteo\20260701_12z"
     )
 
-    ranker = rank_ensemble(path)
+    ranker = rank_ensemble(path, compute_timestep="ALL")
     ranker.get_total_displacement()
     ranker.rank_total_displacement()

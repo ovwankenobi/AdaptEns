@@ -95,6 +95,19 @@ def _natural_sort_key(path: Path):
     ]
 
 
+def _limit_timesteps(items, compute_timestep):
+    """
+    Restrict an ordered sequence of timestep items to the requested count.
+
+    compute_timestep = "ALL" -> keep every timestep.
+    compute_timestep = 1     -> keep only the first timestep.
+    compute_timestep = N     -> keep the first N timesteps.
+    """
+    if isinstance(compute_timestep, str) and compute_timestep.upper() == "ALL":
+        return items
+    return items[: int(compute_timestep)]
+
+
 def _load_arrays(file: Path):
     """
     Loads variables for one ensemble file, bypassing netCDF4's automatic
@@ -323,6 +336,7 @@ class DetermineFSS_displacement:
         base_dir,
         max_workers: int | None = None,
         blas_threads_per_worker: int = 1,
+        compute_timestep: int | str = "ALL",
     ):
         """
         max_workers: number of process-pool workers (parallel forecast
@@ -356,6 +370,7 @@ class DetermineFSS_displacement:
 
         self._max_workers = max_workers or (os.cpu_count() or 1)
         self._blas_threads_per_worker = blas_threads_per_worker
+        self.compute_timestep = compute_timestep
 
     def compile_fractions_time(self):
         sample_files = sorted(self._ens_dirs[0].glob("*.nc"))
@@ -364,6 +379,7 @@ class DetermineFSS_displacement:
             raise RuntimeError(f"No NetCDF files found in {self._ens_dirs[0]}")
 
         forecast_names = [f.name for f in sample_files]
+        forecast_names = _limit_timesteps(forecast_names, self.compute_timestep)
 
         task_args = [
             (
@@ -422,11 +438,11 @@ if __name__ == "__main__":
 
     path = (
         r"D:\rsderamos\Operational_06_18_2026\Operations"
-        r"\meteo_database\ecmwf_meteo\20260701_18z"
+        r"\meteo_database\ecmwf_meteo\20260701_12z"
     )
 
     fss = DetermineFSS_displacement(
-        path,
+        path, compute_timestep="ALL",
         max_workers=8,
         blas_threads_per_worker=1,   # tune against blas_threads_per_worker=4, max_workers=2, etc.
     )

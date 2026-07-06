@@ -24,6 +24,19 @@ from tqdm import tqdm
 _KEY_RE = re.compile(r"^(.*)_L(\d+)$")
 
 
+def _limit_timesteps(items, compute_timestep):
+    """
+    Restrict an ordered sequence of timestep items to the requested count.
+
+    compute_timestep = "ALL" -> keep every timestep.
+    compute_timestep = 1     -> keep only the first timestep.
+    compute_timestep = N     -> keep the first N timesteps.
+    """
+    if isinstance(compute_timestep, str) and compute_timestep.upper() == "ALL":
+        return items
+    return items[: int(compute_timestep)]
+
+
 def _group_keys_by_var(keys: list[str]) -> dict[str, list[int]]:
     """
     Maps each variable name to the column indices (into the displacement
@@ -39,12 +52,13 @@ def _group_keys_by_var(keys: list[str]) -> dict[str, list[int]]:
 
 
 class get_mean_displacement:
-    def __init__(self, base_dir):
+    def __init__(self, base_dir, compute_timestep: int | str = "ALL"):
         self.base_dir = Path(base_dir)
 
         self.fss_dir = self.base_dir / "_adapt" / "_fss_disp"
         self.mean_disp = self.base_dir / "_adapt" / "_mean_disp"
         self.mean_disp.mkdir(parents=True, exist_ok=True)
+        self.compute_timestep = compute_timestep
 
     def compute(self):
         """
@@ -60,6 +74,8 @@ class get_mean_displacement:
         if not npz_files:
             print(f"No NPZ files found in {self.fss_dir}")
             return
+
+        npz_files = _limit_timesteps(npz_files, self.compute_timestep)
 
         for npz_file in tqdm(npz_files, desc="Mean displacement", unit="timestep"):
             data = np.load(npz_file, allow_pickle=False)
@@ -101,7 +117,7 @@ class get_mean_displacement:
 if __name__ == "__main__":
     path = (
         r"D:\rsderamos\Operational_06_18_2026\Operations"
-        r"\meteo_database\ecmwf_meteo\20260701_18z"
+        r"\meteo_database\ecmwf_meteo\20260701_12z"
     )
 
-    get_mean_displacement(path).compute()
+    get_mean_displacement(path, compute_timestep="ALL").compute()

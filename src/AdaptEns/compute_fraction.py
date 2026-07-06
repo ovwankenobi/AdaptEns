@@ -27,6 +27,19 @@ FILL_INT16 = np.int16(-32768)
 _SIZES = {L: 2 * L + 1 for L in L_VALUES}
 
 
+def _limit_timesteps(items, compute_timestep):
+    """
+    Restrict an ordered sequence of timestep items to the requested count.
+
+    compute_timestep = "ALL" -> keep every timestep.
+    compute_timestep = 1     -> keep only the first timestep.
+    compute_timestep = N     -> keep the first N timesteps.
+    """
+    if isinstance(compute_timestep, str) and compute_timestep.upper() == "ALL":
+        return items
+    return items[: int(compute_timestep)]
+
+
 # ── fast raw NetCDF4 read ──────────────────────────────────────────────────────
 def _read_arrays(path: Path) -> dict[str, np.ndarray]:
     """
@@ -177,9 +190,10 @@ def _process_file(args: tuple[Path, Path, Path]) -> str | None:
 
 # ── orchestrator ──────────────────────────────────────────────────────────────
 class MakeFraction:
-    def __init__(self, base_dir: str) -> None:
+    def __init__(self, base_dir: str, compute_timestep: int | str = "ALL") -> None:
         self.base_dir  = Path(base_dir)
         self.adapt_dir = self.base_dir / "_adapt"
+        self.compute_timestep = compute_timestep
 
     def compute_fraction(self) -> None:
         threshold_dir = self.adapt_dir / "_50th_percentile"
@@ -191,7 +205,8 @@ class MakeFraction:
                 continue
             out_dir = fraction_dir / ens_dir.name
             out_dir.mkdir(parents=True, exist_ok=True)
-            for ens_file in sorted(ens_dir.glob("*.nc")):
+            ens_files = _limit_timesteps(sorted(ens_dir.glob("*.nc")), self.compute_timestep)
+            for ens_file in ens_files:
                 threshold_file = threshold_dir / ens_file.name
                 if not threshold_file.exists():
                     print(f"[WARN] Missing threshold file: {threshold_file}")
@@ -225,5 +240,5 @@ class MakeFraction:
 
 
 if __name__ == "__main__":
-    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260701_18z"
-    MakeFraction(path).compute_fraction()
+    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260701_12z"
+    MakeFraction(path, compute_timestep="ALL").compute_fraction()
