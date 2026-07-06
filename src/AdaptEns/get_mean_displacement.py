@@ -5,7 +5,7 @@ Created on June 2026
 @author: Rovie de Ramos
 @email: rsderamos01@gmail.com
 
-Compiles the per-member total displacement per variable from the pairwise
+Compiles the per-member mean displacement  per variable from the pairwise
 FSS-displacement tensors in _fss_disp:
 
     d_i = sum_L sum_(j != i) d_{i,j,L} / (N_L * (N_ens - 1))
@@ -38,22 +38,22 @@ def _group_keys_by_var(keys: list[str]) -> dict[str, list[int]]:
     return groups
 
 
-class get_tot_displacement:
+class get_mean_displacement:
     def __init__(self, base_dir):
         self.base_dir = Path(base_dir)
 
         self.fss_dir = self.base_dir / "_adapt" / "_fss_disp"
-        self.tot_disp = self.base_dir / "_adapt" / "_tot_disp"
-        self.tot_disp.mkdir(parents=True, exist_ok=True)
+        self.mean_disp = self.base_dir / "_adapt" / "_mean_disp"
+        self.mean_disp.mkdir(parents=True, exist_ok=True)
 
     def compute(self):
         """
-        Calculates the total displacement per member, per variable:
+        Calculates the mean displacement per member, per variable:
 
             d_i = sum_L sum_(j != i) d_{i,j,L} / (N_L * (N_ens - 1))
 
         for every forecast-time NPZ file in _fss_disp, saving one NPZ per
-        forecast time into _tot_disp.
+        forecast time into _mean_disp.
         """
         npz_files = sorted(self.fss_dir.glob("*.npz"))
 
@@ -61,7 +61,7 @@ class get_tot_displacement:
             print(f"No NPZ files found in {self.fss_dir}")
             return
 
-        for npz_file in tqdm(npz_files, desc="Total displacement", unit="timestep"):
+        for npz_file in tqdm(npz_files, desc="Mean displacement", unit="timestep"):
             data = np.load(npz_file, allow_pickle=False)
 
             displacement = data["displacement"]  # (n_ens, n_ens, n_keys)
@@ -91,8 +91,8 @@ class get_tot_displacement:
                 total[:, v_idx] = summed / np.float32(n_l * (n_ens - 1))
 
             np.savez(
-                self.tot_disp / npz_file.name,
-                total_displacement=total,
+                self.mean_disp / npz_file.name,
+                mean_displacement=total,
                 ensembles=ensembles,
                 variables=np.array(variables),
             )
@@ -104,4 +104,4 @@ if __name__ == "__main__":
         r"\meteo_database\ecmwf_meteo\20260701_18z"
     )
 
-    get_tot_displacement(path).compute()
+    get_mean_displacement(path).compute()

@@ -12,8 +12,8 @@ def load_npz(npz_path):
 
     # total-displacement files store a per-ensemble/per-variable value;
     # pairwise files store displacement or raw FSS scores between ensembles
-    if "total_displacement" in data.files:
-        values = data["total_displacement"]
+    if "mean_displacement" in data.files:
+        values = data["mean_displacement"]
     elif "displacement" in data.files:
         values = data["displacement"]
     else:
