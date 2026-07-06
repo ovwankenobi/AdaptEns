@@ -14,7 +14,7 @@ Optimized v7 (SSD deployment):
 - Corrupt/truncated file detection before processing
 - zlib compression on output
 """
-
+import sys
 import os
 import multiprocessing as mp
 import warnings
@@ -200,5 +200,12 @@ class make_50th_percentile:
 
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260701_12z"
-    make_50th_percentile(path, compute_timestep="ALL").make_50th_percentile()
+    #path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260701_12z"
+    path = sys.argv[1]
+    compute_timestep = sys.argv[2]
+    make_50th_percentile(path, compute_timestep = compute_timestep).make_50th_percentile()
+
+    
+
+    
+    

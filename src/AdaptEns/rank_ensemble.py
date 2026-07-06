@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-
+import sys
 import numpy as np
 from tqdm import tqdm
 
@@ -130,11 +130,12 @@ class rank_ensemble:
 
 
 if __name__ == "__main__":
-    path = (
+    """path = (
         r"D:\rsderamos\Operational_06_18_2026\Operations"
         r"\meteo_database\ecmwf_meteo\20260701_12z"
-    )
-
-    ranker = rank_ensemble(path, compute_timestep="ALL")
+    )"""
+    path = sys.argv[1]
+    compute_timestep = sys.argv[2]
+    ranker = rank_ensemble(path, compute_timestep = compute_timestep)
     ranker.get_total_displacement()
     ranker.rank_total_displacement()

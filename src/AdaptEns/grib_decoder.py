@@ -273,12 +273,6 @@ if __name__ == "__main__":
     a.grib_parameters()
     a.loadgrib()
     """
-
-
-    if len(sys.argv) != 2:
-        print("Usage: python run grib_decoder.py <path>")
-        sys.exit(1)
-
     path = sys.argv[1]
 
     a = decode_Grib(path, is_ensemble=True, delete_tmp_folders=True, name = "ecmwf_meteo")

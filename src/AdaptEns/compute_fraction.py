@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import multiprocessing as mp
-
+import sys
 import numpy as np
 import netCDF4 as nc                    # direct NetCDF4 — much faster than xarray for small files
 from scipy.ndimage import uniform_filter
@@ -240,5 +240,7 @@ class MakeFraction:
 
 
 if __name__ == "__main__":
-    path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260701_12z"
-    MakeFraction(path, compute_timestep="ALL").compute_fraction()
+    #path = r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260701_12z"
+    path = sys.argv[1]
+    compute_timestep = sys.argv[2]
+    MakeFraction(path, compute_timestep = compute_timestep).compute_fraction()

@@ -14,7 +14,7 @@ for each ensemble member i and each atmospheric variable.
 """
 
 from __future__ import annotations
-
+import sys
 from pathlib import Path
 import re
 
@@ -115,9 +115,12 @@ class get_mean_displacement:
 
 
 if __name__ == "__main__":
+    """
     path = (
         r"D:\rsderamos\Operational_06_18_2026\Operations"
         r"\meteo_database\ecmwf_meteo\20260701_12z"
     )
-
-    get_mean_displacement(path, compute_timestep="ALL").compute()
+    """
+    path = sys.argv[1]
+    compute_timestep = sys.argv[2]
+    get_mean_displacement(path, compute_timestep = compute_timestep).compute()

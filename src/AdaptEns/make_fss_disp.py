@@ -54,6 +54,7 @@ import time
 import netCDF4 as nc
 import numpy as np
 from tqdm import tqdm
+import sys
 
 try:
     from threadpoolctl import threadpool_limits
@@ -435,14 +436,17 @@ class DetermineFSS_displacement:
 
 if __name__ == "__main__":
     mp.freeze_support()
-
+    """
     path = (
         r"D:\rsderamos\Operational_06_18_2026\Operations"
-        r"\meteo_database\ecmwf_meteo\20260701_12z"
+        r"\meteo_database\ecmwf_meteo\20260701_06z"
     )
+    """
 
+    path = sys.argv[1]
+    compute_timestep =  sys.argv[2]
     fss = DetermineFSS_displacement(
-        path, compute_timestep="ALL",
+        path, compute_timestep = compute_timestep,
         max_workers=8,
         blas_threads_per_worker=1,   # tune against blas_threads_per_worker=4, max_workers=2, etc.
     )
