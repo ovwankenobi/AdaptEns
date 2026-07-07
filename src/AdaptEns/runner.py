@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on July 2026
+
+@author: Rovie de Ramos
+@email: rsderamos01@gmail.com
+"""
 
 from pathlib import Path
 

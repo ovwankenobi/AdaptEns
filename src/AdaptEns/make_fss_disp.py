@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
 """
+Created on July 2026
+
+@author: Rovie de Ramos
+@email: rsderamos01@gmail.com
+@gcf_email: rderamos.gcf.pagasa@gmail.com
+
 Optimized FSS-displacement compiler using NPZ tensor storage.
 
 Each pairwise FSS is converted to a displacement d = (1 - FSS) * (2L + 1)
