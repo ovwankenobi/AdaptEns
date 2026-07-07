@@ -244,7 +244,7 @@ class decode_Grib:
             shutil.rmtree(self.path_gribfolder, ignore_errors=True)
 
     def loadgrib(self):
-        variables = ("10u", "10v", "msl", "tp")
+        variables = VARS
 
         ensemble_members = list(range(1, 51)) if self.is_ensemble else [50]
 
