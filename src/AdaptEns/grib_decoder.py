@@ -26,6 +26,31 @@ import glob
 
 VARS = {"tp", "10u", "10v", "msl"}
 
+# GRIB shortName -> variable name cfgrib gives it
+CFGRIB_NAMES = {"tp": "tp", "10u": "u10", "10v": "v10", "msl": "msl"}
+
+# ecCodes can fail to parse its definitions when several workers start at once,
+# returning a dataset with the variable missing. Re-open this many times.
+OPEN_RETRIES = 3
+
+
+def _open_grib(file, var):
+    expected = CFGRIB_NAMES.get(var, var)
+
+    for attempt in range(1, OPEN_RETRIES + 1):
+        ds = xr.open_dataset(
+            file,
+            engine="cfgrib",
+            backend_kwargs={"indexpath": ""}
+        )
+        if expected in ds.data_vars:
+            return ds.load()
+
+        ds.close()
+        time.sleep(0.5 * attempt)
+
+    raise ValueError(f"'{expected}' not found in {file} after {OPEN_RETRIES} attempts")
+
 
 def process_file(args):
     filepath, tmp_param, is_ensemble = args
@@ -47,10 +72,10 @@ def process_file(args):
                     pert_num = codes_get(gid, "perturbationNumber", int)
 
                     if is_ensemble:
-                        if pert_num < 1 or pert_num > 50:
+                        if pert_num < 0 or pert_num > 50:
                             continue
                     else:
-                        if pert_num != 50:
+                        if pert_num != 0:
                             continue
 
                     step = codes_get(gid, "step", int)
@@ -99,11 +124,7 @@ def _process_member(args):
 
         for file in files:
             try:
-                ds = xr.open_dataset(
-                    file,
-                    engine="cfgrib",
-                    backend_kwargs={"indexpath": ""}
-                )
+                ds = _open_grib(file, var)
 
                 step_coord = ds.coords.get("step", None)
 
@@ -168,7 +189,7 @@ def _process_member(args):
         "v10": "wind_v",
         "msl": "barometric_pressure",
     }
-    ds = ds.rename(rename_dict)
+    ds = ds.rename({k: v for k, v in rename_dict.items() if k in ds.variables})
 
     init_time = pd.Timestamp(ds.coords["time"].values)
     times = init_time + pd.to_timedelta(ds.step.values, unit="h")
@@ -246,17 +267,23 @@ class decode_Grib:
     def loadgrib(self):
         variables = VARS
 
-        ensemble_members = list(range(1, 51)) if self.is_ensemble else [50]
+        # 0 = HRES (E1D), 1-50 = ENS perturbed members (E1E)
+        ensemble_members = list(range(0, 51)) if self.is_ensemble else [0]
 
-        sample_folder = os.path.join(self.tmp_param, f"{ensemble_members[0]}_ens")
-        n_files = len(glob.glob(os.path.join(sample_folder, "msl_step*.grib")))
+        # Size the progress bar from the first member folder that exists
+        sample_folder = next(
+            (os.path.join(self.tmp_param, f"{m}_ens") for m in ensemble_members
+             if os.path.isdir(os.path.join(self.tmp_param, f"{m}_ens"))),
+            None
+        )
+        n_files = len(glob.glob(os.path.join(sample_folder, "msl_step*.grib"))) if sample_folder else 0
         total_outputs = len(ensemble_members) * n_files
 
         workers = max(4, mp.cpu_count() - 1)
 
         with tqdm(total=total_outputs, desc="Writing NetCDF files", unit="file") as pbar:
             with mp.Pool(workers) as pool:
-                for ensemble_members, files_written in pool.imap_unordered(
+                for member, files_written in pool.imap_unordered(
                     _process_member,
                     [(m, self.tmp_param, variables, self.name, self.base_dir) for m in ensemble_members]
                 ):

@@ -15,6 +15,7 @@ def run_adapt_ens (path,
                    delete_tmp_folders, 
                    name,
                    compute_timestep,
+                   adapt_ens = False
                    ):
     bat = Path(__file__).parent / "runner.bat"
     print (bat)
@@ -25,6 +26,7 @@ def run_adapt_ens (path,
         str(delete_tmp_folders),
         str(name),
         str(compute_timestep),
+        str(adapt_ens),
     ], shell=True)
     return
 
@@ -36,4 +38,5 @@ if __name__ == "__main__":
                    delete_tmp_folders = True, 
                    name = "ecmwf_meteo",
                    compute_timestep= "ALL",
+                   adapt_ens = False
                    )
