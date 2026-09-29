@@ -1,85 +1,45 @@
 # `grib_decoder.py`
 
-`grib_decoder.py` converts ECMWF GRIB forecast data into NetCDF files organized by ensemble member and forecast time.
+`grib_decoder.py` converts ECMWF GRIB forecast data into NetCDF files, in either the CoSMoS layout (one file per member per timestep) or the SCHISM layout (one file per member).
+
+**Pipeline position:** stage 1 of 7. It always runs, whether or not the ranking stages run afterwards.
 
 The module uses:
 
 - `eccodes` to read and write raw GRIB messages.
-- `xarray` with the `cfgrib` engine to load split GRIB files as datasets.
-- `multiprocessing.Pool` to split the original GRIB files in parallel.
-- `concurrent.futures.ProcessPoolExecutor` to convert ensemble-member folders into NetCDF outputs in parallel.
+- `xarray` with the `cfgrib` engine to load the split GRIB files as datasets.
+- `multiprocessing.Pool` to split the raw GRIB files in parallel, and again to build each member's NetCDF output in parallel.
 
-## Main Workflow
+## Main workflow
 
 ```text
-Raw GRIB files
+<path>/_tmp_grib/          raw GRIB files
     -> grib_parameters()
-Temporary GRIB files grouped by member, variable, and step
+<path>/_tmp_param/<member>_ens/<var>_step<step>.grib
     -> loadgrib()
-Per-member, per-time NetCDF files
+<path>/<member>_ens/<name>.YYYYMMDD_HHMM.nc         (type="cosmos", or schism + adapt_ens)
+<path>/<name>_<YYYYMMDDHHMM>_<member>.nc            (type="schism")
 ```
 
-For a Day 0 to Day 5 forecast range, the typical runtime is about `30 seconds` for `grib_parameters()` and about `1 minute` for writing the NetCDF files in `loadgrib()`.
+For a Day 0 to Day 5 forecast range, `grib_parameters()` typically takes about `30 seconds` and `loadgrib()` about `1 minute` in the CoSMoS layout.
+
+## Ensemble members
+
+| Member | Source files | Meaning |
+| --- | --- | --- |
+| `0` | `E1D*` | HRES reference forecast (GRIB `perturbationNumber` 0). |
+| `1`–`50` | `E1E*` | ENS perturbed members. |
+
+`is_ensemble=True` keeps members `0..50`; `is_ensemble=False` keeps member `0` only. Both file streams are downloaded by `sKit_meteo.ecmwf.download_data` in SurgeKit.
 
 ## Constants
 
-```python
-VARS = {"tp", "10u", "10v", "msl"}
-```
-
-Only messages with these GRIB `shortName` values are kept. All other GRIB messages are skipped.
-
-## `process_file(args)`
-
-Splits one raw GRIB file into smaller temporary GRIB files.
-
-Expected `args` tuple:
-
-| Position | Name | Meaning |
+| Name | Value | Purpose |
 | --- | --- | --- |
-| `0` | `filepath` | Raw GRIB file to read. |
-| `1` | `tmp_param` | Temporary output folder, usually `<base_dir>/_tmp_param`. |
-| `2` | `is_ensemble` | Whether to process ensemble members `1..50` or deterministic member `50`. |
-
-For each GRIB message, the function:
-
-1. Reads the next message using `codes_grib_new_from_file`.
-2. Gets the GRIB `shortName`; messages outside `VARS` are ignored.
-3. Gets `perturbationNumber`.
-4. Keeps members `1..50` when `is_ensemble=True`; otherwise keeps only member `50`.
-5. Gets the forecast `step`.
-6. Writes the message to:
-
-```text
-<tmp_param>/<perturbationNumber>_ens/<shortName>_step<step>.grib
-```
-
-Open file handles are cached in `local_outputs` while the source file is processed, then closed in the `finally` block.
-
-## `_process_member(args)`
-
-Internal worker used by `loadgrib()`. It is underscore-prefixed because it is not part of the public workflow, but it is documented here because it lives inside the public `grib_decoder.py` module and explains how output files are produced.
-
-Expected `args` tuple:
-
-| Position | Name | Meaning |
-| --- | --- | --- |
-| `0` | `member` | Ensemble member number. |
-| `1` | `tmp_param` | Temporary folder containing split GRIB files. |
-| `2` | `variables` | Variables to load: `10u`, `10v`, `msl`, `tp`. |
-| `3` | `name` | Output filename prefix, currently `ecmwf_meteo`. |
-| `4` | `base_dir` | Parent folder where final ensemble folders are written. |
-
-For each variable, the worker:
-
-1. Finds matching files with `<var>_step*.grib`.
-2. Opens each file with `xr.open_dataset(..., engine="cfgrib")`.
-3. Reads the forecast `step` coordinate.
-4. Converts `step` to integer forecast hours.
-5. Sorts datasets by forecast step.
-6. Concatenates all steps for that variable.
-
-After all variables are loaded, it merges the datasets, converts total precipitation into precipitation rate, renames variables, computes real datetimes, and writes NetCDF files.
+| `VARS` | `{"tp", "10u", "10v", "msl"}` | GRIB `shortName` values to keep. All other messages are skipped. |
+| `CFGRIB_NAMES` | `{"tp": "tp", "10u": "u10", "10v": "v10", "msl": "msl"}` | Variable name `cfgrib` gives each `shortName`, used to check that a file loaded correctly. |
+| `OPEN_RETRIES` | `3` | How many times `_open_grib()` re-opens a file before giving up. |
+| `SCHISM_ATTRS` | dict | CF attributes written on each variable and coordinate in the SCHISM file. |
 
 ## `decode_Grib`
 
@@ -89,69 +49,121 @@ Primary class for running the decoder.
 
 ```python
 decode_Grib(
-    path_gribfolder=None,
+    path=None,
     is_ensemble=True,
     delete_tmp_folders=False,
+    name=None,
+    type="cosmos",
+    adapt_ens=False,
+    member_workers=None,
 )
 ```
 
 | Parameter | Description |
 | --- | --- |
-| `path_gribfolder` | Folder containing raw GRIB files. |
-| `is_ensemble` | If `True`, process members `1..50`. If `False`, process member `50`. |
-| `delete_tmp_folders` | If `True`, remove temporary folders after processing stages. |
-
-The constructor also sets:
-
-| Attribute | Value |
-| --- | --- |
-| `name` | `ecmwf_meteo`, used as the NetCDF filename prefix. |
-| `base_dir` | Parent folder of `path_gribfolder`. |
+| `path` | Forecast cycle folder. The raw GRIB files are read from `<path>/_tmp_grib`, and all outputs are written to `path`. |
+| `is_ensemble` | `True` processes members `0..50`; `False` processes member `0` only. |
+| `delete_tmp_folders` | `True` removes `_tmp_grib` after `grib_parameters()` and `_tmp_param` after `loadgrib()`. |
+| `name` | Output filename prefix. Pass it explicitly: the class default is `None`, which would produce filenames starting with `None`. The command-line entry point defaults to `ecmwf_meteo`. |
+| `type` | `"cosmos"` or `"schism"` (case-insensitive). Selects the output layout. |
+| `adapt_ens` | When `True` with `type="schism"`, also writes the CoSMoS layout so the ranking stages have input. Has no effect with `type="cosmos"`, which always writes that layout. |
+| `member_workers` | Number of parallel member workers in `loadgrib()`. Defaults to `min(cpu_count - 1, 6)`, with a minimum of 1. |
 
 ### `grib_parameters()`
 
-Creates the temporary split-GRIB folder and fills it.
+Splits the raw GRIB files into small per-member, per-variable, per-step files.
 
-This method:
+1. Creates `<path>/_tmp_param`.
+2. Lists every file in `<path>/_tmp_grib`.
+3. Runs `process_file()` on each file in a `multiprocessing.Pool` of `max(4, cpu_count - 1)` workers, with a `tqdm` progress bar.
+4. Prints the elapsed time.
+5. Deletes `_tmp_grib` when `delete_tmp_folders=True`.
 
-1. Creates `<base_dir>/_tmp_param`.
-2. Lists all files in `path_gribfolder`.
-3. Uses a multiprocessing pool to run `process_file()` on every raw GRIB file.
-4. Displays progress with `tqdm`.
-5. Prints elapsed time.
-6. Optionally deletes `path_gribfolder` when `delete_tmp_folders=True`.
-
-Run this method before `loadgrib()`.
+Run this before `loadgrib()`; it sets `self.tmp_param`, which `loadgrib()` reads.
 
 ### `loadgrib()`
 
-Builds final NetCDF files from `_tmp_param`.
+Builds the final NetCDF files from `_tmp_param`.
 
-This method:
+1. Selects the members (`0..50` or `[0]`).
+2. Sizes the progress bar from the first member folder that exists, counting its `msl_step*.grib` files. Each member counts as that many files in the CoSMoS layout, plus one file in the SCHISM layout.
+3. Runs `_process_member()` for each member in a `multiprocessing.Pool` of `member_workers` workers. The pool is capped because each worker holds a whole member in memory.
+4. Deletes `_tmp_param` when `delete_tmp_folders=True`.
 
-1. Sets the variables to `("10u", "10v", "msl", "tp")`.
-2. Selects ensemble members:
-   - `range(1, 51)` when `is_ensemble=True`.
-   - `[50]` when `is_ensemble=False`.
-3. Opens one sample `msl` GRIB file to count forecast steps.
-4. Uses a process pool to run `_process_member()` for each member.
-5. Updates a progress bar as NetCDF files are written.
-6. Optionally deletes `_tmp_param` when `delete_tmp_folders=True`.
+## `process_file(args)`
 
-## NetCDF Time Handling
+Splits one raw GRIB file. `args` is `(filepath, tmp_param, is_ensemble)`.
 
-The GRIB files carry an initialization time and forecast step. The module computes output times like this:
+For each GRIB message, the function:
 
-```python
-init_time = pd.Timestamp(ds.coords["time"].values)
-times = init_time + pd.to_timedelta(ds.step.values, unit="h")
+1. Skips it if its `shortName` is not in `VARS`.
+2. Reads `perturbationNumber`, and keeps `0..50` when `is_ensemble=True`, or only `0` otherwise.
+3. Reads the forecast `step`.
+4. Appends the message to `<tmp_param>/<perturbationNumber>_ens/<shortName>_step<step>.grib`.
+
+Open file handles are cached while the source file is processed, then closed in a `finally` block.
+
+## `_process_member(args)`
+
+Internal worker used by `loadgrib()`. `args` is `(member, tmp_param, variables, name, base_dir, type, adapt_ens)`. It returns `(member, files_written)`.
+
+1. For each variable, loads every `<var>_step*.grib` file with `_open_grib()`, converts `step` to integer hours, sorts by step, and concatenates along `step`. Files that fail to load are reported and skipped.
+2. Merges the variables into one dataset.
+3. Converts cumulative `tp` into a precipitation rate (see [Precipitation](#precipitation)).
+4. Converts `step` into real datetimes (`init_time + step`) and makes `time` the dimension.
+5. Calls `_write_schism()` when `type == "schism"`.
+6. Calls `_write_cosmos()` when `type == "cosmos"` or `adapt_ens` is `True`.
+
+If the member folder is missing or holds no data, it prints a message and returns `(member, 0)`.
+
+## `_open_grib(file, var)`
+
+Opens one split GRIB file with `cfgrib` and checks that the expected variable (from `CFGRIB_NAMES`) is present. ecCodes can fail to parse its definitions when several workers start at once, which returns a dataset without the variable; in that case the function closes the dataset, waits `0.5 × attempt` seconds, and retries, up to `OPEN_RETRIES` times. It then raises `ValueError`.
+
+## Output layouts
+
+### CoSMoS (`_write_cosmos`)
+
+One NetCDF file per timestep, in one folder per member:
+
+```text
+<path>/<member>_ens/<name>.YYYYMMDD_HHMM.nc
 ```
 
-Then it swaps the dimension from `step` to `time`, so each written NetCDF file represents one real forecast datetime.
+| Source name | Output name |
+| --- | --- |
+| `latitude` | `lat` (sorted ascending) |
+| `longitude` | `lon` |
+| `u10` | `wind_u` |
+| `v10` | `wind_v` |
+| `msl` | `barometric_pressure` |
+| `tp` | `precipitation` |
 
-## NetCDF Encoding
+The `time` coordinate is dropped from each single-timestep file; the time is carried by the filename.
 
-All data variables are written with:
+### SCHISM (`_write_schism`)
+
+One NetCDF file per member, holding every timestep:
+
+```text
+<path>/<name>_<YYYYMMDDHHMM>_<member>.nc      e.g. ECMWF_surf_202607010600_0.nc
+```
+
+| Property | Value |
+| --- | --- |
+| Dimensions | `(time, lat, lon)` |
+| Latitude order | descending |
+| Longitude order | ascending |
+| Variables | `10u`, `10v`, `msl`, `precipitation` |
+| Other coordinates | dropped (only `time`, `lat`, `lon` are kept) |
+| `time` encoding | `hours since <init time>`, `proleptic_gregorian`, `float64` |
+| Global attributes | `Conventions = CF-1.6`, `institution = European Centre for Medium-Range Weather Forecasts` |
+
+Variable and coordinate attributes come from `SCHISM_ATTRS` (for example `msl` gets `standard_name = air_pressure_at_mean_sea_level` and `units = Pa`; `precipitation` gets `units = mm h**-1`).
+
+### Encoding (both layouts)
+
+All data variables are written with the `h5netcdf` engine and:
 
 | Encoding option | Value |
 | --- | --- |
@@ -159,7 +171,26 @@ All data variables are written with:
 | `complevel` | `1` |
 | `dtype` | `float32` |
 
-The files are written with the `h5netcdf` engine.
+## Precipitation
+
+GRIB `tp` is cumulative total precipitation in metres. The decoder differences consecutive steps, divides by the step length in hours, and multiplies by `1000`, giving a rate in mm/h. The first step is set to `0`, and any `NaN` is filled with `0`.
+
+## Command line
+
+```bash
+python -m AdaptEns.grib_decoder "<path>" [is_ensemble] [delete_tmp_folders] [name] [type] [adapt_ens]
+```
+
+| Position | Argument | Default |
+| --- | --- | --- |
+| 1 | `path` | required |
+| 2 | `is_ensemble` | `True` |
+| 3 | `delete_tmp_folders` | `True` |
+| 4 | `name` | `ecmwf_meteo` |
+| 5 | `type` | `cosmos` |
+| 6 | `adapt_ens` | `False` |
+
+Booleans accept `1`, `true`, `yes`, `y`, `t` (case-insensitive) as `True`; anything else is `False`.
 
 ## Example
 
@@ -167,18 +198,18 @@ The files are written with the `h5netcdf` engine.
 from AdaptEns.grib_decoder import decode_Grib
 
 decoder = decode_Grib(
-    path_gribfolder=r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260621_00z\_tmp_grib",
+    r"D:\rsderamos\Operational_06_18_2026\Operations\meteo_database\ecmwf_meteo\20260701_06z",
     is_ensemble=True,
     delete_tmp_folders=False,
+    name="ECMWF_surf",
+    type="schism",
 )
 
 decoder.grib_parameters()
 decoder.loadgrib()
 ```
 
-## Notes and Assumptions
+## Notes and assumptions
 
-- `loadgrib()` expects `_tmp_param` to already exist, so `grib_parameters()` should run first.
-- The code assumes `msl_step*.grib` exists in the first selected ensemble folder.
-- The output filename prefix is fixed as `ecmwf_meteo`.
-- The script block under `if __name__ == "__main__":` is an example run path for a local Windows-style operational folder.
+- `loadgrib()` needs `grib_parameters()` to have run first in the same object.
+- A member whose `_tmp_param/<member>_ens` folder is missing (for example when the `E1D` files were not downloaded) is skipped with a message, not treated as an error.

@@ -10,3 +10,6 @@ authors = [
     {name = "Rovie S. de Ramos"}
 ]
 requires-python = ">=3.11"
+
+[tool.setuptools.package-data]
+AdaptEns = ["*.bat"]
