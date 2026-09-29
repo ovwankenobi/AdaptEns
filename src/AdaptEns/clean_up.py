@@ -20,9 +20,10 @@ from pathlib import Path
 import sys
 
 class clean_up:
-    def __init__(self, base_dir, delete_tmp_folders=True):
+    def __init__(self, base_dir, delete_tmp_folders=True, type="cosmos"):
         self.base_dir = Path(base_dir)
         self.delete_tmp_folders = delete_tmp_folders
+        self.type = str(type).strip().lower()
 
         self.adapt_dir = self.base_dir / "_adapt"
         self.src_path = self.adapt_dir / "ens_ranked.json"
@@ -53,6 +54,14 @@ class clean_up:
             shutil.rmtree(self.adapt_dir)
             print(f"Removed {self.adapt_dir}")
 
+            # schism output lives in <name>_<init>_<member>.nc; the _ens folders were
+            # only written as working input for the ranking steps.
+            if self.type == "schism":
+                for ens_dir in self.base_dir.glob("*_ens"):
+                    if ens_dir.is_dir():
+                        shutil.rmtree(ens_dir)
+                print(f"Removed *_ens folders in {self.base_dir}")
+
         return self.dst_path
 
 
@@ -62,5 +71,6 @@ def _parse_bool(value):
 
 if __name__ == "__main__":
     path = sys.argv[1]
-    delete_tmp_folders = sys.argv[2]
-    clean_up(path, delete_tmp_folders = delete_tmp_folders).run()
+    delete_tmp_folders = _parse_bool(sys.argv[2]) if len(sys.argv) > 2 else True
+    type = sys.argv[3] if len(sys.argv) > 3 else "cosmos"
+    clean_up(path, delete_tmp_folders = delete_tmp_folders, type = type).run()

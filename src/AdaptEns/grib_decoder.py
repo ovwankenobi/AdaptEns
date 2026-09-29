@@ -104,7 +104,7 @@ def process_file(args):
 
 
 def _process_member(args):
-    member, tmp_param, variables, name, base_dir = args
+    member, tmp_param, variables, name, base_dir, type, adapt_ens = args
 
     ensemble_folder = os.path.join(tmp_param, f"{member}_ens")
 
@@ -164,13 +164,13 @@ def _process_member(args):
 
     if "tp" in ds:
         tp = ds["tp"].values
-        step_hours_arr = ds["tp"].step.values.astype(float)
+        step_hours_arr = ds["tp"].step.values.astype(np.float32)
 
         dt = np.diff(step_hours_arr, prepend=step_hours_arr[0])
         dt[0] = dt[1] if len(dt) > 1 else 3.0
 
         rain = np.zeros_like(tp)
-        rain[1:] = (tp[1:] - tp[:-1]) / dt[1:, None, None] * 1000.0
+        rain[1:] = (tp[1:] - tp[:-1]) / dt[1:, None, None] * np.float32(1000.0)
 
         tp_rate = xr.DataArray(
             rain,
@@ -182,6 +182,83 @@ def _process_member(args):
         ds = ds.drop_vars("tp")
         ds["precipitation"] = tp_rate.fillna(0.0)
 
+    init_time = pd.Timestamp(ds.coords["time"].values)
+    times = init_time + pd.to_timedelta(ds.step.values, unit="h")
+
+    ds = ds.assign_coords(time=("step", times))
+    ds = ds.swap_dims({"step": "time"})
+
+    files_written = 0
+
+    if type == "schism":
+        _write_schism(ds, member, name, init_time, base_dir)
+        files_written += 1
+
+    # The ranking steps read the cosmos layout, so schism runs with
+    # adapt_ens still need the <member>_ens folders as working input.
+    if type == "cosmos" or adapt_ens:
+        files_written += _write_cosmos(ds, member, name, base_dir)
+
+    ds.close()
+    return member, files_written
+
+
+# Variable/coord attributes of the SCHISM forcing file (<name>_*.nc)
+SCHISM_ATTRS = {
+    "10u": {"long_name": "10 metre U wind component", "units": "m s**-1"},
+    "10v": {"long_name": "10 metre V wind component", "units": "m s**-1"},
+    "msl": {"standard_name": "air_pressure_at_mean_sea_level",
+            "long_name": "Mean sea level pressure", "units": "Pa"},
+    "precipitation": {"long_name": "Precipitation rate", "units": "mm h**-1"},
+    "time": {"standard_name": "time", "axis": "T"},
+    "lat": {"standard_name": "latitude", "long_name": "latitude",
+            "units": "degrees_north", "axis": "Y"},
+    "lon": {"standard_name": "longitude", "long_name": "longitude",
+            "units": "degrees_east", "axis": "X"},
+}
+
+
+def _write_schism(ds, member, name, init_time, base_dir):
+    """Write one file per member: dims (time, lat, lon), lat descending."""
+    rename_dict = {
+        "latitude": "lat",
+        "longitude": "lon",
+        "u10": "10u",
+        "v10": "10v",
+    }
+    ds = ds.rename({k: v for k, v in rename_dict.items() if k in ds.variables})
+
+    keep = {"time", "lat", "lon"}
+    ds = ds.drop_vars([c for c in ds.coords if c not in keep])
+    ds = ds.sortby("lat", ascending=False).sortby("lon")
+    ds = ds.transpose("time", "lat", "lon")
+
+    for var in ds.variables:
+        ds[var].attrs = dict(SCHISM_ATTRS.get(var, {}))
+    ds.attrs = {
+        "Conventions": "CF-1.6",
+        "institution": "European Centre for Medium-Range Weather Forecasts",
+    }
+
+    encoding = {
+        var: {"zlib": True, "complevel": 1, "dtype": "float32"}
+        for var in ds.data_vars
+    }
+    encoding["time"] = {
+        "units": f"hours since {init_time:%Y-%m-%d %H:%M:%S}",
+        "calendar": "proleptic_gregorian",
+        "dtype": "float64",
+    }
+
+    filename = os.path.join(
+        base_dir, f"{name}_{init_time:%Y%m%d%H%M}_{member}.nc"
+    )
+    ds.to_netcdf(filename, encoding=encoding, engine="h5netcdf")
+    ds.close()
+
+
+def _write_cosmos(ds, member, name, base_dir):
+    """Write one file per timestep into <base_dir>/<member>_ens."""
     rename_dict = {
         "latitude": "lat",
         "longitude": "lon",
@@ -190,12 +267,6 @@ def _process_member(args):
         "msl": "barometric_pressure",
     }
     ds = ds.rename({k: v for k, v in rename_dict.items() if k in ds.variables})
-
-    init_time = pd.Timestamp(ds.coords["time"].values)
-    times = init_time + pd.to_timedelta(ds.step.values, unit="h")
-
-    ds = ds.assign_coords(time=("step", times))
-    ds = ds.swap_dims({"step": "time"})
     ds = ds.sortby("lat")
 
     # Write one NC per timestep (suggestion #1 intentionally not applied)
@@ -217,8 +288,7 @@ def _process_member(args):
         ds_time.close()
         files_written += 1
 
-    ds.close()
-    return member, files_written
+    return files_written
 
 
 class decode_Grib:
@@ -226,8 +296,14 @@ class decode_Grib:
     def __init__(self, path=None,
                  is_ensemble=True,
                  delete_tmp_folders=False,
-                 name = None):
+                 name = None,
+                 type = "cosmos",
+                 adapt_ens = False,
+                 member_workers = None):
         self.path = path
+        self.type = str(type).strip().lower()
+        self.adapt_ens = adapt_ens
+        self.member_workers = member_workers
         self.path_gribfolder = os.path.join(self.path,"_tmp_grib")
         self.delete_tmp_folders = delete_tmp_folders
         self.is_ensemble = is_ensemble
@@ -277,15 +353,24 @@ class decode_Grib:
             None
         )
         n_files = len(glob.glob(os.path.join(sample_folder, "msl_step*.grib"))) if sample_folder else 0
-        total_outputs = len(ensemble_members) * n_files
+        # Per member: n_files cosmos timestep files and/or one schism file
+        per_member = 0
+        if self.type == "cosmos" or self.adapt_ens:
+            per_member += n_files
+        if self.type == "schism":
+            per_member += 1
+        total_outputs = len(ensemble_members) * per_member
 
-        workers = max(4, mp.cpu_count() - 1)
+        # Each worker holds a full member in memory; cap the pool so the
+        # machine does not run out of RAM.
+        workers = self.member_workers or min(max(1, mp.cpu_count() - 1), 6)
 
         with tqdm(total=total_outputs, desc="Writing NetCDF files", unit="file") as pbar:
             with mp.Pool(workers) as pool:
                 for member, files_written in pool.imap_unordered(
                     _process_member,
-                    [(m, self.tmp_param, variables, self.name, self.base_dir) for m in ensemble_members]
+                    [(m, self.tmp_param, variables, self.name, self.base_dir,
+                      self.type, self.adapt_ens) for m in ensemble_members]
                 ):
                     pbar.update(files_written)
 
@@ -300,9 +385,23 @@ if __name__ == "__main__":
     a.grib_parameters()
     a.loadgrib()
     """
-    path = sys.argv[1]
+    def _parse_bool(value):
+        return str(value).strip().lower() in ("1", "true", "yes", "y", "t")
 
-    a = decode_Grib(path, is_ensemble=True, delete_tmp_folders=True, name = "ecmwf_meteo")
+    # argv: path, is_ensemble, delete_tmp_folders, name, type, adapt_ens
+    path = sys.argv[1]
+    is_ensemble = _parse_bool(sys.argv[2]) if len(sys.argv) > 2 else True
+    delete_tmp_folders = _parse_bool(sys.argv[3]) if len(sys.argv) > 3 else True
+    name = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else "ecmwf_meteo"
+    type = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else "cosmos"
+    adapt_ens = _parse_bool(sys.argv[6]) if len(sys.argv) > 6 else False
+
+    a = decode_Grib(path,
+                    is_ensemble=is_ensemble,
+                    delete_tmp_folders=delete_tmp_folders,
+                    name=name,
+                    type=type,
+                    adapt_ens=adapt_ens)
     a.grib_parameters()
     a.loadgrib()
     

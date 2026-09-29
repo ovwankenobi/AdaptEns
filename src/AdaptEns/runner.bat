@@ -1,6 +1,6 @@
 @echo off 
 REM ── bz2togrib launcher ──────────────────────────────────────────────        
-python -m AdaptEns.grib_decoder "%~1" "%~2" "%~3" "%~4"
+python -m AdaptEns.grib_decoder "%~1" "%~2" "%~3" "%~4" "%~7" "%~6"
 REM ── proceed with ranking only if 6th argument is True ──────────────────────────────────────────────
 IF /I NOT "%~6"=="True" (
     echo [SKIP] Ranking steps skipped ^(flag = "%~6"^).
@@ -17,7 +17,7 @@ python -m AdaptEns.get_mean_displacement "%~1" "%~5"
 REM ── ranking the ensemble members ──────────────────────────────────────────────
 python -m AdaptEns.rank_ensemble "%~1" "%~5"
 REM ── deleting──────────────────────────────────────────────
-python -m AdaptEns.clean_up "%~1" "%~3"
+python -m AdaptEns.clean_up "%~1" "%~3" "%~7"
 
 :end
 

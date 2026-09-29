@@ -15,8 +15,16 @@ def run_adapt_ens (path,
                    delete_tmp_folders, 
                    name,
                    compute_timestep,
-                   adapt_ens = False
+                   adapt_ens = False,
+                   type = "cosmos"
                    ):
+    # cosmos: <member>_ens/<name>.YYYYMMDD_HHMM.nc (one file per timestep)
+    # schism: <name>_<YYYYMMDDHHMM>_<member>.nc (one file per member),
+    #         e.g. name="ECMWF_surf" -> ECMWF_surf_201912020000_0.nc
+    type = str(type).strip().lower()
+    if type not in ("cosmos", "schism"):
+        raise ValueError(f"type must be 'cosmos' or 'schism', got '{type}'")
+
     bat = Path(__file__).parent / "runner.bat"
     print (bat)
     subprocess.run([
@@ -27,6 +35,7 @@ def run_adapt_ens (path,
         str(name),
         str(compute_timestep),
         str(adapt_ens),
+        type,
     ], shell=True)
     return
 
@@ -38,5 +47,6 @@ if __name__ == "__main__":
                    delete_tmp_folders = True, 
                    name = "ecmwf_meteo",
                    compute_timestep= "ALL",
-                   adapt_ens = False
+                   adapt_ens = False,
+                   type = "cosmos"
                    )
