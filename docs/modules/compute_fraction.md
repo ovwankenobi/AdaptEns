@@ -51,7 +51,7 @@ Builds a processing queue for every NetCDF file in every `*_ens` folder, then pr
 3. Creates matching member output folders such as `_fraction/1_ens`.
 4. Applies `compute_timestep` to limit how many timesteps each member contributes.
 5. Skips files with a missing threshold (prints a `[WARN]`).
-6. Uses up to `mp.cpu_count()` workers, capped by the number of queued files.
+6. Uses up to `mp.cpu_count()` workers, capped by the number of queued files and by 61 (the Windows limit).
 7. Prints warnings or errors after processing.
 
 ## Variables and neighborhoods

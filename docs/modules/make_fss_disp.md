@@ -55,7 +55,7 @@ DetermineFSS_displacement(
 | Parameter | Description |
 | --- | --- |
 | `base_dir` | Forecast-cycle folder. Reads `_adapt/_fraction`, writes `_adapt/_fss_disp`. |
-| `max_workers` | Number of process-pool workers (parallel forecast times in flight). Defaults to the CPU count. |
+| `max_workers` | Number of process-pool workers (parallel forecast times in flight). Defaults to the CPU count, capped at 61 (the Windows limit). |
 | `blas_threads_per_worker` | BLAS threads inside each worker's matmul. Keep `max_workers * blas_threads_per_worker` near your core count to avoid oversubscription. |
 | `compute_timestep` | `"ALL"` or first `N` timesteps. |
 

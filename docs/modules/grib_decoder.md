@@ -75,7 +75,7 @@ Splits the raw GRIB files into small per-member, per-variable, per-step files.
 
 1. Creates `<path>/_tmp_param`.
 2. Lists every file in `<path>/_tmp_grib`.
-3. Runs `process_file()` on each file in a `multiprocessing.Pool` of `max(4, cpu_count - 1)` workers, with a `tqdm` progress bar.
+3. Runs `process_file()` on each file in a `multiprocessing.Pool` of `min(cpu_count - 1, 61, number of files)` workers (61 is the Windows limit), with a `tqdm` progress bar.
 4. Prints the elapsed time.
 5. Deletes `_tmp_grib` when `delete_tmp_folders=True`.
 

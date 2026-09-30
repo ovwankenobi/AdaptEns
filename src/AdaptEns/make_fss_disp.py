@@ -375,7 +375,8 @@ class DetermineFSS_displacement:
                 f"No ensemble directories found in {self.fraction_dir}"
             )
 
-        self._max_workers = max_workers or (os.cpu_count() or 1)
+        # Windows process pools can wait on at most ~61 worker handles
+        self._max_workers = max_workers or min(os.cpu_count() or 1, 61)
         self._blas_threads_per_worker = blas_threads_per_worker
         self.compute_timestep = compute_timestep
 

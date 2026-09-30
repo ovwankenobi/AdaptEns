@@ -322,7 +322,8 @@ class decode_Grib:
             for f in os.listdir(self.path_gribfolder)
         ]
 
-        workers = max(4, mp.cpu_count() - 1)
+        # Windows Pool can wait on at most ~61 worker handles
+        workers = max(1, min(mp.cpu_count() - 1, 61, len(grib_files)))
 
         with mp.Pool(workers) as pool:
             list(tqdm(

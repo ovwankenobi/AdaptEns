@@ -219,7 +219,8 @@ class MakeFraction:
 
         # With 16+ cores and 500+ tiny files, maximise process count
         # Each worker is mostly waiting on disk, so go above cpu_count-1
-        n_workers = min(mp.cpu_count(), len(queue))
+        # Windows Pool can wait on at most ~61 worker handles
+        n_workers = min(mp.cpu_count(), len(queue), 61)
         errors: list[str] = []
 
         with mp.Pool(n_workers) as pool:
